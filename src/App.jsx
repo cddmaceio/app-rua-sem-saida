@@ -149,7 +149,7 @@ export default function App() {
       setFiltros({ sem_saida: 'Sim', setor: '', busca: '' });
       await carregarClientes({ sem_saida: 'Sim', setor: '', busca: '' });
       await carregarResumo();
-      alert(`Recalculo concluido! ${result.processados} clientes processados. ${result.em_rua_sem_saida} em rua sem saida.`);
+      alert(`Recalculo concluido em ${result.tempo_segundos || '?'}s!\n${result.processados} clientes processados.\n${result.em_rua_sem_saida} em rua sem saida (${Math.round((result.em_rua_sem_saida / result.total_clientes) * 100)}%).`);
     } catch (e) {
       setError(e.message);
     } finally {
