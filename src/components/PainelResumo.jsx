@@ -12,11 +12,11 @@ function PainelResumo({ resumo }) {
 
   const cards = [
     { label: 'Total Clientes', value: resumo.total_clientes },
-    { label: 'Em Rua Sem Saida', value: resumo.em_rua_sem_saida, color: '#e74c3c' },
+    { label: 'Em Rua Sem Saida', value: resumo.em_rua_sem_saida, color: '#27ae60' },
     { label: 'Fora', value: resumo.fora, color: '#3498db' },
     { label: 'Total Ruas', value: resumo.total_ruas },
     { label: 'Raio Atual', value: `${resumo.raio_busca}m` },
-    { label: 'Percentual', value: `${resumo.percentual}%`, color: resumo.percentual > 0 ? '#e67e22' : undefined },
+    { label: 'Percentual', value: `${resumo.percentual}%`, color: resumo.percentual > 0 ? '#27ae60' : undefined },
   ];
 
   return (

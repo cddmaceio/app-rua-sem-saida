@@ -13,7 +13,7 @@ function RuaLayer({ rua }) {
       const [lng, lat] = geom.coordinates;
       if (isNaN(lat) || isNaN(lng)) return null;
       return (
-        <CircleMarker center={[lat, lng]} radius={4} color="#e67e22" fillColor="#e67e22" fillOpacity={0.7} weight={1}>
+        <CircleMarker center={[lat, lng]} radius={4} color="#e74c3c" fillColor="#e74c3c" fillOpacity={0.7} weight={1}>
           <Popup>
             <strong>{rua.nome || 'Sem nome'}</strong><br />
             OSM ID: {rua.osm_id}
@@ -23,14 +23,14 @@ function RuaLayer({ rua }) {
     }
     if (geom.type === 'LineString') {
       const coords = geom.coordinates.map(([lng, lat]) => [lat, lng]);
-      return <Polyline positions={coords} pathOptions={{ color: '#e67e22', weight: 2, opacity: 0.5 }} />;
+      return <Polyline positions={coords} pathOptions={{ color: '#e74c3c', weight: 2, opacity: 0.5 }} />;
     }
     if (geom.type === 'MultiLineString') {
       return (
         <>
           {geom.coordinates.map((line, i) => {
             const coords = line.map(([lng, lat]) => [lat, lng]);
-            return <Polyline key={i} positions={coords} pathOptions={{ color: '#e67e22', weight: 2, opacity: 0.5 }} />;
+            return <Polyline key={i} positions={coords} pathOptions={{ color: '#e74c3c', weight: 2, opacity: 0.5 }} />;
           })}
         </>
       );
@@ -72,8 +72,8 @@ function MapaClientes({ clientes, ruas }) {
             key={`cliente-${cliente.id}`}
             center={[Number(cliente.latitude), Number(cliente.longitude)]}
             radius={cliente.sem_saida === 'Sim' ? 6 : 4}
-            color={cliente.sem_saida === 'Sim' ? '#e74c3c' : '#3498db'}
-            fillColor={cliente.sem_saida === 'Sim' ? '#e74c3c' : '#3498db'}
+            color={cliente.sem_saida === 'Sim' ? '#27ae60' : '#3498db'}
+            fillColor={cliente.sem_saida === 'Sim' ? '#27ae60' : '#3498db'}
             fillOpacity={0.7}
             weight={1}
           >
@@ -81,7 +81,7 @@ function MapaClientes({ clientes, ruas }) {
               <strong>{cliente.nome_cliente || 'Sem nome'}</strong><br />
               Codigo: {cliente.codigo_cliente}<br />
               Setor: {cliente.setor}<br />
-              Rua sem saida: <strong style={{ color: cliente.sem_saida === 'Sim' ? '#e74c3c' : '#3498db' }}>
+              Rua sem saida: <strong style={{ color: cliente.sem_saida === 'Sim' ? '#27ae60' : '#3498db' }}>
                 {cliente.sem_saida}
               </strong><br />
               Distancia: {cliente.distancia_metros != null ? `${cliente.distancia_metros}m` : 'N/A'}
@@ -90,9 +90,9 @@ function MapaClientes({ clientes, ruas }) {
         ))}
       </MapContainer>
       <div className="map-legend">
-        <div><span className="legend-dot" style={{ background: '#e74c3c' }} /> Em rua sem saida</div>
+        <div><span className="legend-dot" style={{ background: '#27ae60' }} /> PDV na Rua Sem Saida</div>
         <div><span className="legend-dot" style={{ background: '#3498db' }} /> Fora</div>
-        <div><span className="legend-dot" style={{ background: '#e67e22' }} /> Ruas sem saida</div>
+        <div><span className="legend-dot" style={{ background: '#e74c3c' }} /> Ruas Sem Saida</div>
         {clientes.length > MAX_CLIENTES_MAPA && (
           <div style={{ fontSize: 10, color: '#999', marginTop: 4 }}>
             Mapa: {MAX_CLIENTES_MAPA} de {clientes.length} clientes
