@@ -149,7 +149,13 @@ export default function App() {
       setFiltros({ sem_saida: 'Sim', setor: '', busca: '' });
       await carregarClientes({ sem_saida: 'Sim', setor: '', busca: '' });
       await carregarResumo();
-      alert(`Recalculo concluido em ${result.tempo_segundos || '?'}s!\n${result.processados} clientes processados.\n${result.em_rua_sem_saida} em rua sem saida (${Math.round((result.em_rua_sem_saida / result.total_clientes) * 100)}%).`);
+      const pct = result.total_clientes > 0 ? Math.round((result.em_rua_sem_saida / result.total_clientes) * 100) : 0;
+      let msg = `Recalculo concluido em ${result.tempo_segundos || '?'}s!\n`;
+      msg += `${result.processados} clientes processados.\n`;
+      msg += `${result.em_rua_sem_saida} em rua sem saida (${pct}%).\n`;
+      msg += `${result.total_ruas} ruas (${result.ruas_validas || result.total_ruas} geometricas validas).`;
+      if (result.falhas_turf > 0) msg += `\nAVISO: ${result.falhas_turf} falhas no calculo Turf.js.`;
+      alert(msg);
     } catch (e) {
       setError(e.message);
     } finally {

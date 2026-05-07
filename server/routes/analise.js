@@ -36,30 +36,54 @@ router.post('/analise/recalcular', (req, res) => {
 
   console.log(`[Recalculo] Iniciando: ${clientes.length} clientes x ${ruas.length} ruas, raio=${raio}m`);
 
-  // Pre-parse all geometries once and compute bounding boxes
+  // Pre-parse all geometries and validate coordinates
   const ruasParsed = [];
+  let ruasInvalidas = 0;
   for (const rua of ruas) {
     try {
       const geom = JSON.parse(rua.geojson);
+      if (!geom || !geom.type || !geom.coordinates || !Array.isArray(geom.coordinates)) {
+        ruasInvalidas++;
+        continue;
+      }
+      if (geom.type === 'LineString' && geom.coordinates.length < 2) {
+        ruasInvalidas++;
+        continue;
+      }
       const bbox = turf.bbox(geom);
-      ruasParsed.push({ id: rua.id, geometry: geom, bbox });
+      if (bbox.some(v => !isFinite(v))) {
+        ruasInvalidas++;
+        continue;
+      }
+      ruasParsed.push({ id: rua.id, nome: rua.nome, geometry: geom, bbox });
     } catch (e) {
-      console.log(`[Recalculo] Geometria invalida na rua id=${rua.id}, ignorando`);
+      ruasInvalidas++;
     }
   }
 
+  console.log(`[Recalculo] ${ruasParsed.length} geometrias validas, ${ruasInvalidas} invalidas/ignoradas`);
+
   if (ruasParsed.length === 0) {
-    return res.status(400).json({ erro: 'Nenhuma rua com geometria valida' });
+    return res.status(400).json({ erro: `Nenhuma rua com geometria valida (${ruasInvalidas} invalidas de ${ruas.length})` });
   }
 
-  console.log(`[Recalculo] ${ruasParsed.length} geometrias parseadas`);
+  // Log first 5 geometries for debugging
+  console.log('[Recalculo] Amostra das primeiras ruas:');
+  ruasParsed.slice(0, 5).forEach(r => {
+    console.log(`  id=${r.id} nome="${r.nome}" tipo=${r.geometry.type} bbox=[${r.bbox.map(v => v.toFixed(4)).join(', ')}]`);
+  });
 
   const updateStmt = db.prepare('UPDATE clientes SET sem_saida = ?, distancia_metros = ? WHERE id = ?');
+
+  // Bbox pre-filter only for large datasets (> 300 ruas), with generous buffer
+  const USE_BBOX_FILTER = ruasParsed.length > 300;
   const degPerMeter = 1 / 111000;
-  const bboxBuffer = (raio + 200) * degPerMeter;
+  const bboxBuffer = (raio + 1000) * degPerMeter;
 
   let processados = 0;
   let ignorados = 0;
+  let falhasTurf = 0;
+  let pulosBbox = 0;
   const BATCH = 500;
 
   for (let i = 0; i < clientes.length; i += BATCH) {
@@ -78,12 +102,14 @@ router.post('/analise/recalcular', (req, res) => {
         let menorDistancia = Infinity;
 
         for (const rua of ruasParsed) {
-          const [minLng, minLat, maxLng, maxLat] = rua.bbox;
-
-          // Bounding box pre-filter: skip streets clearly too far
-          if (lng < minLng - bboxBuffer || lng > maxLng + bboxBuffer ||
-              lat < minLat - bboxBuffer || lat > maxLat + bboxBuffer) {
-            continue;
+          // Bbox pre-filter (only for large datasets)
+          if (USE_BBOX_FILTER) {
+            const [minLng, minLat, maxLng, maxLat] = rua.bbox;
+            if (lng < minLng - bboxBuffer || lng > maxLng + bboxBuffer ||
+                lat < minLat - bboxBuffer || lat > maxLat + bboxBuffer) {
+              pulosBbox++;
+              continue;
+            }
           }
 
           try {
@@ -104,12 +130,14 @@ router.post('/analise/recalcular', (req, res) => {
               continue;
             }
 
-            if (dist < menorDistancia) {
-              menorDistancia = dist;
-              if (dist <= raio) break; // Early exit: already within radius
+            if (typeof dist === 'number' && isFinite(dist)) {
+              if (dist < menorDistancia) {
+                menorDistancia = dist;
+                if (dist <= raio) break; // Early exit: already within radius
+              }
             }
           } catch (e) {
-            continue;
+            falhasTurf++;
           }
         }
 
@@ -130,13 +158,31 @@ router.post('/analise/recalcular', (req, res) => {
   const totalSim = db.prepare("SELECT COUNT(*) as count FROM clientes WHERE sem_saida = 'Sim'").get().count;
   const totalNao = db.prepare("SELECT COUNT(*) as count FROM clientes WHERE sem_saida = 'Nao'").get().count;
 
-  console.log(`[Recalculo] Concluido em ${elapsed}s — ${totalSim} Sim / ${totalNao} Nao`);
+  // Log diagnostics
+  console.log(`[Recalculo] Concluido em ${elapsed}s`);
+  console.log(`[Recalculo] Resultado: ${totalSim} Sim / ${totalNao} Nao / ${ignorados} sem coordenadas`);
+  if (falhasTurf > 0) console.log(`[Recalculo] AVISO: ${falhasTurf} falhas no Turf.js`);
+  if (USE_BBOX_FILTER) console.log(`[Recalculo] Pulos por bbox: ${pulosBbox}`);
+
+  // Verify distances for first 5 "Sim" clients
+  const amostraSim = db.prepare("SELECT * FROM clientes WHERE sem_saida = 'Sim' LIMIT 5").all();
+  if (amostraSim.length > 0) {
+    console.log('[Recalculo] Amostra clientes "Sim":');
+    amostraSim.forEach(c => console.log(`  ${c.codigo_cliente} - ${c.nome_cliente} - ${c.distancia_metros}m`));
+  }
+  const amostraNao = db.prepare("SELECT * FROM clientes WHERE sem_saida = 'Nao' LIMIT 3").all();
+  if (amostraNao.length > 0) {
+    console.log('[Recalculo] Amostra clientes "Nao" (menores distancias):');
+    amostraNao.forEach(c => console.log(`  ${c.codigo_cliente} - ${c.nome_cliente} - ${c.distancia_metros}m`));
+  }
 
   res.json({
     processados,
     ignorados,
+    falhas_turf: falhasTurf,
     total_clientes: clientes.length,
     total_ruas: ruas.length,
+    ruas_validas: ruasParsed.length,
     raio_busca: raio,
     em_rua_sem_saida: totalSim,
     fora: totalNao,
