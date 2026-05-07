@@ -56,10 +56,13 @@ export async function getConfiguracao() {
   return res.json();
 }
 
-export async function atualizarConfiguracao(raio_busca) {
+export async function atualizarConfiguracao(raio_busca, modo_calculo) {
+  const body = {};
+  if (raio_busca) body.raio_busca = raio_busca;
+  if (modo_calculo) body.modo_calculo = modo_calculo;
   const res = await request('/configuracao', {
     method: 'PUT',
-    body: JSON.stringify({ raio_busca }),
+    body: JSON.stringify(body),
   });
   return res.json();
 }

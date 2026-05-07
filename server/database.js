@@ -36,13 +36,28 @@ db.exec(`
     geojson TEXT,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   );
-
-  CREATE TABLE IF NOT EXISTS configuracao (
-    id INTEGER PRIMARY KEY CHECK (id = 1),
-    raio_busca INTEGER DEFAULT 50
-  );
-
-  INSERT OR IGNORE INTO configuracao (id, raio_busca) VALUES (1, 50);
 `);
+
+// Config table with migration support
+const colExists = db.prepare("PRAGMA table_info('configuracao')").all().some(c => c.name === 'modo_calculo');
+
+if (!colExists) {
+  const tableExists = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='configuracao'").get();
+  if (tableExists) {
+    db.exec(`ALTER TABLE configuracao ADD COLUMN modo_calculo TEXT DEFAULT 'ponto_final'`);
+    db.exec(`UPDATE configuracao SET modo_calculo = 'ponto_final' WHERE modo_calculo IS NULL`);
+  } else {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS configuracao (
+        id INTEGER PRIMARY KEY CHECK (id = 1),
+        raio_busca INTEGER DEFAULT 50,
+        modo_calculo TEXT DEFAULT 'ponto_final'
+      );
+      INSERT OR IGNORE INTO configuracao (id, raio_busca, modo_calculo) VALUES (1, 50, 'ponto_final');
+    `);
+  }
+} else {
+  db.exec(`UPDATE configuracao SET modo_calculo = 'ponto_final' WHERE modo_calculo IS NULL`);
+}
 
 export default db;

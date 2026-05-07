@@ -11,7 +11,7 @@ import * as api from './api';
 export default function App() {
   const [clientes, setClientes] = useState([]);
   const [ruas, setRuas] = useState([]);
-  const [config, setConfig] = useState({ raio_busca: 50 });
+  const [config, setConfig] = useState({ raio_busca: 50, modo_calculo: 'ponto_final' });
   const [resumo, setResumo] = useState(null);
   const [loading, setLoading] = useState(false);
   const [filtros, setFiltros] = useState({ sem_saida: '', setor: '', busca: '' });
@@ -131,11 +131,11 @@ export default function App() {
     }
   };
 
-  const handleConfigChange = async (raio_busca) => {
+  const handleConfigChange = async (raio_busca, modo_calculo) => {
     clearError();
     try {
-      await api.atualizarConfiguracao(raio_busca);
-      setConfig({ raio_busca });
+      await api.atualizarConfiguracao(raio_busca, modo_calculo);
+      setConfig(c => ({ ...c, ...(raio_busca ? { raio_busca } : {}), ...(modo_calculo ? { modo_calculo } : {}) }));
     } catch (e) {
       setError(e.message);
     }

@@ -25,6 +25,20 @@ router.get('/diagnostico', (req, res) => {
       geojson_parsed: (() => { try { return JSON.parse(r.geojson); } catch (e) { return { erro: e.message }; } })(),
       geojson_tamanho: r.geojson ? r.geojson.length : 0
     }));
+
+    // Count geometry types
+    const todasRuas = db.prepare('SELECT geojson FROM ruas_sem_saida').all();
+    const tipos = {};
+    let invalidas = 0;
+    for (const r of todasRuas) {
+      try {
+        const g = JSON.parse(r.geojson);
+        if (!g || !g.type) { invalidas++; continue; }
+        tipos[g.type] = (tipos[g.type] || 0) + 1;
+      } catch (e) { invalidas++; }
+    }
+    diag.tipos_geometria = tipos;
+    diag.geometrias_invalidas = invalidas;
   }
 
   // Test calculation with first valid client and first valid rua
@@ -71,23 +85,27 @@ router.get('/diagnostico', (req, res) => {
 });
 
 router.get('/configuracao', (req, res) => {
-  const config = db.prepare('SELECT raio_busca FROM configuracao WHERE id = 1').get();
-  res.json(config);
+  const config = db.prepare('SELECT raio_busca, modo_calculo FROM configuracao WHERE id = 1').get();
+  res.json({ raio_busca: config.raio_busca, modo_calculo: config.modo_calculo || 'ponto_final' });
 });
 
 router.put('/configuracao', (req, res) => {
-  const { raio_busca } = req.body;
-  if (!raio_busca || raio_busca <= 0) {
-    return res.status(400).json({ erro: 'Raio de busca invalido' });
+  const { raio_busca, modo_calculo } = req.body;
+  if (raio_busca && raio_busca > 0) {
+    db.prepare('UPDATE configuracao SET raio_busca = ? WHERE id = 1').run(raio_busca);
   }
-  db.prepare('UPDATE configuracao SET raio_busca = ? WHERE id = 1').run(raio_busca);
-  res.json({ raio_busca });
+  if (modo_calculo) {
+    db.prepare('UPDATE configuracao SET modo_calculo = ? WHERE id = 1').run(modo_calculo);
+  }
+  const config = db.prepare('SELECT raio_busca, modo_calculo FROM configuracao WHERE id = 1').get();
+  res.json({ raio_busca: config.raio_busca, modo_calculo: config.modo_calculo || 'ponto_final' });
 });
 
 router.post('/analise/recalcular', (req, res) => {
   const tStart = Date.now();
-  const config = db.prepare('SELECT raio_busca FROM configuracao WHERE id = 1').get();
+  const config = db.prepare('SELECT raio_busca, modo_calculo FROM configuracao WHERE id = 1').get();
   const raio = config.raio_busca;
+  const modo = config.modo_calculo || 'ponto_final';
 
   const clientes = db.prepare('SELECT * FROM clientes').all();
   const ruas = db.prepare('SELECT * FROM ruas_sem_saida').all();
@@ -99,7 +117,7 @@ router.post('/analise/recalcular', (req, res) => {
     return res.status(400).json({ erro: 'Nenhuma rua importada' });
   }
 
-  console.log(`[Recalculo] Iniciando: ${clientes.length} clientes x ${ruas.length} ruas, raio=${raio}m`);
+  console.log(`[Recalculo] Iniciando: ${clientes.length} clientes x ${ruas.length} ruas, raio=${raio}m, modo=${modo}`);
 
   // Pre-parse all geometries and validate coordinates
   const ruasParsed = [];
@@ -120,7 +138,25 @@ router.post('/analise/recalcular', (req, res) => {
         ruasInvalidas++;
         continue;
       }
-      ruasParsed.push({ id: rua.id, nome: rua.nome, geometry: geom, bbox });
+
+      const entry = { id: rua.id, nome: rua.nome, geometry: geom, bbox };
+
+      // Extract endpoint for 'ponto_final' mode
+      if (modo === 'ponto_final') {
+        if (geom.type === 'Point') {
+          entry.endpoint = geom.coordinates; // [lng, lat]
+        } else if (geom.type === 'LineString') {
+          entry.endpoint = geom.coordinates[geom.coordinates.length - 1];
+        } else if (geom.type === 'MultiLineString') {
+          const lastLine = geom.coordinates[geom.coordinates.length - 1];
+          entry.endpoint = lastLine[lastLine.length - 1];
+        } else {
+          ruasInvalidas++;
+          continue;
+        }
+      }
+
+      ruasParsed.push(entry);
     } catch (e) {
       ruasInvalidas++;
     }
@@ -132,16 +168,21 @@ router.post('/analise/recalcular', (req, res) => {
     return res.status(400).json({ erro: `Nenhuma rua com geometria valida (${ruasInvalidas} invalidas de ${ruas.length})` });
   }
 
-  // Log first 5 geometries for debugging
-  console.log('[Recalculo] Amostra das primeiras ruas:');
-  ruasParsed.slice(0, 5).forEach(r => {
-    console.log(`  id=${r.id} nome="${r.nome}" tipo=${r.geometry.type} bbox=[${r.bbox.map(v => v.toFixed(4)).join(', ')}]`);
-  });
+  if (modo === 'ponto_final') {
+    console.log('[Recalculo] Modo PONTO FINAL — usando distancia ate a extremidade de cada rua');
+    ruasParsed.slice(0, 5).forEach(r => {
+      console.log(`  id=${r.id} "${r.nome}" endpoint=[${r.endpoint.map(v => v.toFixed(4)).join(', ')}]`);
+    });
+  } else {
+    console.log('[Recalculo] Amostra das primeiras ruas:');
+    ruasParsed.slice(0, 5).forEach(r => {
+      console.log(`  id=${r.id} nome="${r.nome}" tipo=${r.geometry.type}`);
+    });
+  }
 
   const updateStmt = db.prepare('UPDATE clientes SET sem_saida = ?, distancia_metros = ? WHERE id = ?');
 
-  // Bbox pre-filter only for large datasets (> 300 ruas), with generous buffer
-  const USE_BBOX_FILTER = ruasParsed.length > 300;
+  const USE_BBOX_FILTER = modo === 'distancia_rua' && ruasParsed.length > 300;
   const degPerMeter = 1 / 111000;
   const bboxBuffer = (raio + 1000) * degPerMeter;
 
@@ -166,43 +207,61 @@ router.post('/analise/recalcular', (req, res) => {
 
         let menorDistancia = Infinity;
 
-        for (const rua of ruasParsed) {
-          // Bbox pre-filter (only for large datasets)
-          if (USE_BBOX_FILTER) {
-            const [minLng, minLat, maxLng, maxLat] = rua.bbox;
-            if (lng < minLng - bboxBuffer || lng > maxLng + bboxBuffer ||
-                lat < minLat - bboxBuffer || lat > maxLat + bboxBuffer) {
-              pulosBbox++;
-              continue;
+        if (modo === 'ponto_final') {
+          // Fast mode: distance to street endpoint only
+          const ponto = turf.point([lng, lat]);
+          for (const rua of ruasParsed) {
+            try {
+              const dist = turf.distance(ponto, turf.point(rua.endpoint), { units: 'meters' });
+              if (typeof dist === 'number' && isFinite(dist)) {
+                if (dist < menorDistancia) {
+                  menorDistancia = dist;
+                  if (dist <= raio) break;
+                }
+              }
+            } catch (e) {
+              falhasTurf++;
             }
           }
-
-          try {
-            let dist;
-            if (rua.geometry.type === 'LineString' || rua.geometry.type === 'MultiLineString') {
-              dist = turf.pointToLineDistance(
-                turf.point([lng, lat]),
-                rua.geometry,
-                { units: 'meters' }
-              );
-            } else if (rua.geometry.type === 'Point') {
-              dist = turf.distance(
-                turf.point([lng, lat]),
-                rua.geometry,
-                { units: 'meters' }
-              );
-            } else {
-              continue;
-            }
-
-            if (typeof dist === 'number' && isFinite(dist)) {
-              if (dist < menorDistancia) {
-                menorDistancia = dist;
-                if (dist <= raio) break; // Early exit: already within radius
+        } else {
+          // Full mode: distance to entire street geometry
+          for (const rua of ruasParsed) {
+            if (USE_BBOX_FILTER) {
+              const [minLng, minLat, maxLng, maxLat] = rua.bbox;
+              if (lng < minLng - bboxBuffer || lng > maxLng + bboxBuffer ||
+                  lat < minLat - bboxBuffer || lat > maxLat + bboxBuffer) {
+                pulosBbox++;
+                continue;
               }
             }
-          } catch (e) {
-            falhasTurf++;
+
+            try {
+              let dist;
+              if (rua.geometry.type === 'LineString' || rua.geometry.type === 'MultiLineString') {
+                dist = turf.pointToLineDistance(
+                  turf.point([lng, lat]),
+                  rua.geometry,
+                  { units: 'meters' }
+                );
+              } else if (rua.geometry.type === 'Point') {
+                dist = turf.distance(
+                  turf.point([lng, lat]),
+                  rua.geometry,
+                  { units: 'meters' }
+                );
+              } else {
+                continue;
+              }
+
+              if (typeof dist === 'number' && isFinite(dist)) {
+                if (dist < menorDistancia) {
+                  menorDistancia = dist;
+                  if (dist <= raio) break;
+                }
+              }
+            } catch (e) {
+              falhasTurf++;
+            }
           }
         }
 

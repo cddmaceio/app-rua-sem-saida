@@ -7,19 +7,37 @@ function PainelConfiguracao({ config, onRecalcular, onConfigChange, loading, onE
 
   const handlePreset = (r) => {
     setCustomRaio('');
-    onConfigChange(r);
+    onConfigChange(r, null);
   };
 
   const handleCustom = () => {
     const val = parseInt(customRaio, 10);
     if (val > 0) {
-      onConfigChange(val);
+      onConfigChange(val, null);
     }
+  };
+
+  const handleModoChange = (e) => {
+    onConfigChange(null, e.target.value);
   };
 
   return (
     <div className="panel">
       <h3>Configuracao</h3>
+
+      <div className="modo-selector">
+        <label>Modo de calculo:</label>
+        <select value={config.modo_calculo || 'ponto_final'} onChange={handleModoChange} disabled={loading} className="modo-select">
+          <option value="ponto_final">Distancia do ponto final da rua</option>
+          <option value="distancia_rua">Distancia de toda a rua</option>
+        </select>
+        <p className="modo-desc">
+          {config.modo_calculo === 'distancia_rua'
+            ? 'Calcula a distancia minima ate qualquer ponto da rua. Pode incluir clientes em ruas vizinhas.'
+            : 'Calcula a distancia apenas ate a extremidade da rua sem saida. Evita falsos positivos em ruas paralelas.'}
+        </p>
+      </div>
+
       <div className="raio-selector">
         <label>Raio de busca:</label>
         <div className="preset-btns">
