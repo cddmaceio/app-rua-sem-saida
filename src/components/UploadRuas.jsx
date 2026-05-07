@@ -79,7 +79,11 @@ export default function UploadRuas({ onImport, onClear, loading }) {
       />
       {file && features !== null && (
         <div className="file-info">
-          <p>{file.name} ({ruasData.length} ruas de {features} features)</p>
+          <p>{file.name}</p>
+          <p>{ruasData.length} ruas importadas de {features} features</p>
+          {features - ruasData.length > 0 && (
+            <p className="info-ignorados">{features - ruasData.length} features ignoradas (geometria vazia/invalida)</p>
+          )}
         </div>
       )}
       <div className="btn-group">
