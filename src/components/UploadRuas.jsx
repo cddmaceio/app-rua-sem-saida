@@ -4,6 +4,7 @@ export default function UploadRuas({ onImport, onClear, loading }) {
   const [file, setFile] = useState(null);
   const [features, setFeatures] = useState(null);
   const [ruasData, setRuasData] = useState(null);
+  const [importing, setImporting] = useState(false);
   const fileRef = useRef(null);
 
   const handleFileChange = async (e) => {
@@ -50,13 +51,19 @@ export default function UploadRuas({ onImport, onClear, loading }) {
     }
   };
 
-  const handleImport = () => {
-    if (ruasData && ruasData.length > 0) {
-      const substituir = window.confirm('Substituir todas as ruas existentes?');
-      onImport(ruasData, substituir);
+  const handleImport = async () => {
+    if (!ruasData || ruasData.length === 0) return;
+    const substituir = window.confirm('Substituir todas as ruas existentes?');
+    setImporting(true);
+    try {
+      await onImport(ruasData, substituir);
       setFile(null);
       setFeatures(null);
       setRuasData(null);
+    } catch (err) {
+      alert('Erro na importacao: ' + err.message);
+    } finally {
+      setImporting(false);
     }
   };
 
@@ -76,10 +83,10 @@ export default function UploadRuas({ onImport, onClear, loading }) {
         </div>
       )}
       <div className="btn-group">
-        <button onClick={handleImport} disabled={!ruasData || loading} className="btn-primary">
-          Importar
+        <button onClick={handleImport} disabled={!ruasData || loading || importing} className="btn-primary">
+          {importing ? 'Importando...' : 'Importar'}
         </button>
-        <button onClick={() => { onClear(); setFile(null); setFeatures(null); setRuasData(null); }} disabled={loading} className="btn-danger">
+        <button onClick={() => { onClear(); setFile(null); setFeatures(null); setRuasData(null); }} disabled={loading || importing} className="btn-danger">
           Limpar base
         </button>
       </div>

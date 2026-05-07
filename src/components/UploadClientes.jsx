@@ -6,12 +6,18 @@ export default function UploadClientes({ onImport, onClear, loading }) {
   const [preview, setPreview] = useState(null);
   const [ignorados, setIgnorados] = useState(0);
   const [parsedData, setParsedData] = useState(null);
+  const [parsing, setParsing] = useState(false);
+  const [importing, setImporting] = useState(false);
   const fileRef = useRef(null);
 
   const handleFileChange = async (e) => {
     const f = e.target.files[0];
     if (!f) return;
     setFile(f);
+    setParsing(true);
+    setParsedData(null);
+    setPreview(null);
+    setIgnorados(0);
     try {
       const result = await parseFile(f);
       setParsedData(result.clientes);
@@ -20,16 +26,24 @@ export default function UploadClientes({ onImport, onClear, loading }) {
     } catch (err) {
       alert(err.message);
       setFile(null);
+    } finally {
+      setParsing(false);
     }
   };
 
-  const handleImport = () => {
-    if (parsedData && parsedData.length > 0) {
-      const substituir = window.confirm('Substituir todos os clientes existentes?');
-      onImport(parsedData, substituir);
+  const handleImport = async () => {
+    if (!parsedData || parsedData.length === 0) return;
+    const substituir = window.confirm('Substituir todos os clientes existentes?');
+    setImporting(true);
+    try {
+      await onImport(parsedData, substituir);
       setFile(null);
       setPreview(null);
       setParsedData(null);
+    } catch (err) {
+      alert('Erro na importacao: ' + err.message);
+    } finally {
+      setImporting(false);
     }
   };
 
@@ -43,9 +57,10 @@ export default function UploadClientes({ onImport, onClear, loading }) {
         ref={fileRef}
         disabled={loading}
       />
-      {file && (
+      {parsing && <div className="file-info"><p>Processando arquivo... Isso pode levar alguns segundos para arquivos grandes.</p></div>}
+      {file && !parsing && (
         <div className="file-info">
-          <p>{file.name} ({parsedData ? `${parsedData.length} clientes` : 'processando...'})</p>
+          <p>{file.name} ({parsedData ? `${parsedData.length} clientes` : 'erro ao processar'})</p>
           {ignorados > 0 && <p className="info-ignorados">{ignorados} linhas ignoradas (sem coordenadas validas)</p>}
           {preview && (
             <div className="preview-table">
@@ -64,10 +79,10 @@ export default function UploadClientes({ onImport, onClear, loading }) {
         </div>
       )}
       <div className="btn-group">
-        <button onClick={handleImport} disabled={!parsedData || loading} className="btn-primary">
-          Importar
+        <button onClick={handleImport} disabled={!parsedData || loading || importing} className="btn-primary">
+          {importing ? 'Importando...' : 'Importar'}
         </button>
-        <button onClick={() => { onClear(); setFile(null); setPreview(null); setParsedData(null); }} disabled={loading} className="btn-danger">
+        <button onClick={() => { onClear(); setFile(null); setPreview(null); setParsedData(null); }} disabled={loading || importing} className="btn-danger">
           Limpar base
         </button>
       </div>

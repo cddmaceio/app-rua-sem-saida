@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import Layout from './components/Layout';
 import UploadClientes from './components/UploadClientes';
 import UploadRuas from './components/UploadRuas';
@@ -14,14 +14,16 @@ export default function App() {
   const [config, setConfig] = useState({ raio_busca: 50 });
   const [resumo, setResumo] = useState(null);
   const [loading, setLoading] = useState(false);
-  const [filtros, setFiltros] = useState({ sem_saida: 'Sim', setor: '', busca: '' });
+  const [filtros, setFiltros] = useState({ sem_saida: '', setor: '', busca: '' });
   const [error, setError] = useState(null);
+  const mountedRef = useRef(false);
 
   const clearError = () => setError(null);
 
-  const carregarClientes = useCallback(async () => {
+  const carregarClientes = useCallback(async (overrideFiltros) => {
     try {
-      const data = await api.getClientes(filtros);
+      const f = overrideFiltros || filtros;
+      const data = await api.getClientes(f);
       setClientes(data);
     } catch (e) {
       setError(e.message);
@@ -55,18 +57,32 @@ export default function App() {
     }
   }, []);
 
-  useEffect(() => { carregarConfig(); carregarRuas(); }, [carregarConfig, carregarRuas]);
-  useEffect(() => { carregarClientes(); carregarResumo(); }, [carregarClientes, carregarResumo]);
+  useEffect(() => {
+    carregarConfig();
+    carregarRuas();
+    carregarClientes();
+    carregarResumo();
+    mountedRef.current = true;
+  }, []);
+
+  useEffect(() => {
+    if (!mountedRef.current) return;
+    carregarClientes();
+    carregarResumo();
+  }, [filtros]);
 
   const handleImportClientes = async (clientesData, substituir) => {
     setLoading(true);
     clearError();
     try {
-      await api.importarClientes(clientesData, substituir);
-      await carregarClientes();
+      const result = await api.importarClientes(clientesData, substituir);
+      setFiltros({ sem_saida: '', setor: '', busca: '' });
+      await carregarClientes({ sem_saida: '', setor: '', busca: '' });
       await carregarResumo();
+      return result;
     } catch (e) {
       setError(e.message);
+      throw e;
     } finally {
       setLoading(false);
     }
@@ -79,6 +95,7 @@ export default function App() {
       await api.deletarClientes();
       setClientes([]);
       setResumo(null);
+      setFiltros({ sem_saida: '', setor: '', busca: '' });
     } catch (e) {
       setError(e.message);
     } finally {
@@ -90,10 +107,12 @@ export default function App() {
     setLoading(true);
     clearError();
     try {
-      await api.importarRuas(ruasData, substituir);
+      const result = await api.importarRuas(ruasData, substituir);
       await carregarRuas();
+      return result;
     } catch (e) {
       setError(e.message);
+      throw e;
     } finally {
       setLoading(false);
     }
@@ -127,7 +146,8 @@ export default function App() {
     clearError();
     try {
       const result = await api.recalcular();
-      await carregarClientes();
+      setFiltros({ sem_saida: 'Sim', setor: '', busca: '' });
+      await carregarClientes({ sem_saida: 'Sim', setor: '', busca: '' });
       await carregarResumo();
       alert(`Recalculo concluido! ${result.processados} clientes processados. ${result.em_rua_sem_saida} em rua sem saida.`);
     } catch (e) {
@@ -190,7 +210,7 @@ export default function App() {
         onChange={(e) => setFiltros(f => ({ ...f, busca: e.target.value }))}
         className="filtro-busca"
       />
-      <button onClick={() => setFiltros({ sem_saida: 'Sim', setor: '', busca: '' })} className="btn-sm">
+      <button onClick={() => setFiltros({ sem_saida: '', setor: '', busca: '' })} className="btn-sm">
         Limpar filtros
       </button>
     </div>
