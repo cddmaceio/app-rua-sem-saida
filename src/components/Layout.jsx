@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { memo, useState } from 'react';
 
-export default function Layout({ sidebar, filtros, children }) {
+function Layout({ sidebar, filtros, children }) {
   const [sidebarOpen, setSidebarOpen] = useState(true);
 
   return (
@@ -24,3 +24,5 @@ export default function Layout({ sidebar, filtros, children }) {
     </div>
   );
 }
+
+export default memo(Layout);

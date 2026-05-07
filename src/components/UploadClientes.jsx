@@ -1,7 +1,7 @@
-import { useState, useRef } from 'react';
+import { memo, useState, useRef } from 'react';
 import { parseFile } from '../utils/parseClientes';
 
-export default function UploadClientes({ onImport, onClear, loading }) {
+function UploadClientes({ onImport, onClear, loading }) {
   const [file, setFile] = useState(null);
   const [preview, setPreview] = useState(null);
   const [ignorados, setIgnorados] = useState(0);
@@ -93,3 +93,5 @@ export default function UploadClientes({ onImport, onClear, loading }) {
     </div>
   );
 }
+
+export default memo(UploadClientes);

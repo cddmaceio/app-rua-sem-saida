@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import Layout from './components/Layout';
 import UploadClientes from './components/UploadClientes';
 import UploadRuas from './components/UploadRuas';
@@ -167,9 +167,12 @@ export default function App() {
     window.open(api.getExportarUrl(), '_blank');
   };
 
-  const setoresUnicos = [...new Set(clientes.map(c => c.setor).filter(Boolean))].sort();
+  const setoresUnicos = useMemo(
+    () => [...new Set(clientes.map(c => c.setor).filter(Boolean))].sort(),
+    [clientes]
+  );
 
-  const filtrosBar = (
+  const filtrosBar = useMemo(() => (
     <div className="filtros-bar">
       <label>
         <input
@@ -220,7 +223,7 @@ export default function App() {
         Limpar filtros
       </button>
     </div>
-  );
+  ), [filtros, setoresUnicos]);
 
   const sidebar = (
     <>

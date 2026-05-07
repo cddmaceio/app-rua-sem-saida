@@ -1,8 +1,8 @@
-import { useState } from 'react';
+import { memo, useState } from 'react';
 
 const PRESETS = [20, 30, 40, 50, 75, 100];
 
-export default function PainelConfiguracao({ config, onRecalcular, onConfigChange, loading, onExportar }) {
+function PainelConfiguracao({ config, onRecalcular, onConfigChange, loading, onExportar }) {
   const [customRaio, setCustomRaio] = useState('');
 
   const handlePreset = (r) => {
@@ -58,3 +58,5 @@ export default function PainelConfiguracao({ config, onRecalcular, onConfigChang
     </div>
   );
 }
+
+export default memo(PainelConfiguracao);

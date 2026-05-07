@@ -1,4 +1,6 @@
-export default function PainelResumo({ resumo }) {
+import { memo } from 'react';
+
+function PainelResumo({ resumo }) {
   if (!resumo) {
     return (
       <div className="panel">
@@ -31,3 +33,5 @@ export default function PainelResumo({ resumo }) {
     </div>
   );
 }
+
+export default memo(PainelResumo);

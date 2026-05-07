@@ -1,6 +1,6 @@
-import { useState, useRef } from 'react';
+import { memo, useState, useRef } from 'react';
 
-export default function UploadRuas({ onImport, onClear, loading }) {
+function UploadRuas({ onImport, onClear, loading }) {
   const [file, setFile] = useState(null);
   const [features, setFeatures] = useState(null);
   const [ruasData, setRuasData] = useState(null);
@@ -97,3 +97,5 @@ export default function UploadRuas({ onImport, onClear, loading }) {
     </div>
   );
 }
+
+export default memo(UploadRuas);

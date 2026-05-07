@@ -386,6 +386,34 @@ button:disabled {
   padding: 20px;
 }
 
+/* Pagination */
+.pagination {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+}
+
+.pagination button {
+  padding: 2px 8px;
+  font-size: 11px;
+  background: #eee;
+  color: #555;
+  border: 1px solid #ccc;
+  border-radius: 3px;
+}
+
+.pagination button:disabled {
+  opacity: 0.4;
+}
+
+.page-info {
+  font-size: 11px;
+  color: #888;
+  margin: 0 4px;
+  white-space: nowrap;
+}
+
 /* Filtros bar */
 .filtros-bar {
   display: flex;
