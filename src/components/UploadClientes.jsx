@@ -5,6 +5,7 @@ export default function UploadClientes({ onImport, onClear, loading }) {
   const [file, setFile] = useState(null);
   const [preview, setPreview] = useState(null);
   const [ignorados, setIgnorados] = useState(0);
+  const [normalizadas, setNormalizadas] = useState(0);
   const [parsedData, setParsedData] = useState(null);
   const [parsing, setParsing] = useState(false);
   const [importing, setImporting] = useState(false);
@@ -18,11 +19,13 @@ export default function UploadClientes({ onImport, onClear, loading }) {
     setParsedData(null);
     setPreview(null);
     setIgnorados(0);
+    setNormalizadas(0);
     try {
       const result = await parseFile(f);
       setParsedData(result.clientes);
       setPreview(result.preview);
       setIgnorados(result.ignorados);
+      setNormalizadas(result.normalizadas || 0);
     } catch (err) {
       alert(err.message);
       setFile(null);
@@ -62,6 +65,7 @@ export default function UploadClientes({ onImport, onClear, loading }) {
         <div className="file-info">
           <p>{file.name} ({parsedData ? `${parsedData.length} clientes` : 'erro ao processar'})</p>
           {ignorados > 0 && <p className="info-ignorados">{ignorados} linhas ignoradas (sem coordenadas validas)</p>}
+          {normalizadas > 0 && <p className="info-normalizadas">{normalizadas} coordenadas normalizadas (formato inteiro → graus decimais)</p>}
           {preview && (
             <div className="preview-table">
               <table>

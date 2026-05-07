@@ -5,6 +5,71 @@ import db from '../database.js';
 
 const router = Router();
 
+router.get('/diagnostico', (req, res) => {
+  const totalClientes = db.prepare('SELECT COUNT(*) as c FROM clientes').get().c;
+  const totalRuas = db.prepare('SELECT COUNT(*) as c FROM ruas_sem_saida').get().c;
+
+  const diag = { total_clientes: totalClientes, total_ruas: totalRuas };
+
+  if (totalClientes > 0) {
+    const amostraClientes = db.prepare('SELECT codigo_cliente, nome_cliente, latitude, longitude FROM clientes WHERE latitude IS NOT NULL LIMIT 3').all();
+    diag.amostra_clientes = amostraClientes;
+    const clientesSemCoord = db.prepare('SELECT COUNT(*) as c FROM clientes WHERE latitude IS NULL OR longitude IS NULL').get().c;
+    diag.clientes_sem_coordenada = clientesSemCoord;
+  }
+
+  if (totalRuas > 0) {
+    const amostraRuas = db.prepare('SELECT id, osm_id, nome, geojson FROM ruas_sem_saida LIMIT 3').all();
+    diag.amostra_ruas = amostraRuas.map(r => ({
+      ...r,
+      geojson_parsed: (() => { try { return JSON.parse(r.geojson); } catch (e) { return { erro: e.message }; } })(),
+      geojson_tamanho: r.geojson ? r.geojson.length : 0
+    }));
+  }
+
+  // Test calculation with first valid client and first valid rua
+  if (totalClientes > 0 && totalRuas > 0) {
+    const cliente = db.prepare('SELECT * FROM clientes WHERE latitude IS NOT NULL AND longitude IS NOT NULL LIMIT 1').get();
+    const rua = db.prepare('SELECT * FROM ruas_sem_saida LIMIT 1').get();
+
+    if (cliente && rua) {
+      try {
+        const ponto = turf.point([Number(cliente.longitude), Number(cliente.latitude)]);
+        const geom = JSON.parse(rua.geojson);
+        const bbox = turf.bbox(geom);
+
+        diag.teste = {
+          cliente: { codigo: cliente.codigo_cliente, lat: cliente.latitude, lng: cliente.longitude },
+          rua: { id: rua.id, nome: rua.nome, tipo_geometria: geom.type },
+          ponto_geo: ponto,
+          bbox,
+          bbox_finito: bbox.every(v => isFinite(v))
+        };
+
+        if (diag.teste.bbox_finito) {
+          try {
+            if (geom.type === 'LineString' || geom.type === 'MultiLineString') {
+              diag.teste.distancia = turf.pointToLineDistance(ponto, geom, { units: 'meters' });
+              diag.teste.metodo = 'pointToLineDistance';
+            } else if (geom.type === 'Point') {
+              diag.teste.distancia = turf.distance(ponto, geom, { units: 'meters' });
+              diag.teste.metodo = 'distance';
+            } else {
+              diag.teste.erro = 'Tipo de geometria nao suportado: ' + geom.type;
+            }
+          } catch (e) {
+            diag.teste.erro_turf = e.message;
+          }
+        }
+      } catch (e) {
+        diag.teste_erro = e.message;
+      }
+    }
+  }
+
+  res.json(diag);
+});
+
 router.get('/configuracao', (req, res) => {
   const config = db.prepare('SELECT raio_busca FROM configuracao WHERE id = 1').get();
   res.json(config);

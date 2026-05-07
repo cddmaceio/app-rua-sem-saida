@@ -31,6 +31,15 @@ function findColumn(headers, target) {
   return -1;
 }
 
+function normalizarCoordenada(val, maxAbs) {
+  if (Math.abs(val) <= maxAbs) return { valor: val, normalizada: false };
+  for (const div of [1000000, 100000, 10000]) {
+    const normalized = val / div;
+    if (Math.abs(normalized) <= maxAbs) return { valor: normalized, normalizada: true, divisor: div };
+  }
+  return { valor: val, normalizada: false };
+}
+
 export function parseFile(file) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -56,6 +65,7 @@ export function parseFile(file) {
 
         const clientes = [];
         let ignorados = 0;
+        let normalizadas = 0;
 
         for (let i = 1; i < rows.length; i++) {
           const row = rows[i];
@@ -65,13 +75,19 @@ export function parseFile(file) {
           const lngIdx = colIndexes.longitude;
           const latRaw = latIdx !== -1 ? String(row[latIdx]).replace(',', '.') : '';
           const lngRaw = lngIdx !== -1 ? String(row[lngIdx]).replace(',', '.') : '';
-          const lat = parseFloat(latRaw);
-          const lng = parseFloat(lngRaw);
+          let lat = parseFloat(latRaw);
+          let lng = parseFloat(lngRaw);
 
           if (isNaN(lat) || isNaN(lng)) {
             ignorados++;
             continue;
           }
+
+          const latNorm = normalizarCoordenada(lat, 90);
+          const lngNorm = normalizarCoordenada(lng, 180);
+          lat = latNorm.valor;
+          lng = lngNorm.valor;
+          if (latNorm.normalizada || lngNorm.normalizada) normalizadas++;
 
           const cliente = {};
           for (const [key, idx] of Object.entries(colIndexes)) {
@@ -84,7 +100,7 @@ export function parseFile(file) {
           clientes.push(cliente);
         }
 
-        resolve({ clientes, ignorados, preview: rows.slice(0, 6) });
+        resolve({ clientes, ignorados, normalizadas, preview: rows.slice(0, 6) });
       } catch (err) {
         reject(err);
       }
