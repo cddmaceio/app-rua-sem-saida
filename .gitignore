@@ -1,0 +1,6 @@
+node_modules/
+dist/
+server/data/app.sqlite
+server/data/app.sqlite-shm
+server/data/app.sqlite-wal
+.DS_Store
